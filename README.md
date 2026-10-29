@@ -1,5 +1,17 @@
 # 🔋 Battery Pack Architect
 
+> ### ℹ️ This is a modified fork
+>
+> **Upstream: [LMF5000/battery-pack-architect](https://github.com/LMF5000/battery-pack-architect) by Luke Formosa** — all of the design, simulation and 3D work below is theirs. This fork is maintained by [TapRen Tech Solutions](https://www.tapren.com), the tool's North America RFQ partner.
+>
+> **What we changed (GPLv3 §5(a) notice):** only the "Request Manufacturing Quote" flow.
+>
+> Upstream submits the RFQ to a Google Apps Script backend. That deployment now returns HTTP 403 — Google removed it for a Terms of Service violation — and because the client has no branch for a reply that never arrives, a 45-second timer reports *"RFQ service timed out. Please try again."* Retrying cannot work, so quote requests were being lost with no record on either side.
+>
+> This fork removes the backend instead of replacing it. The PDF spec sheet and design file are already generated in the browser, so submitting needs no server: both files are saved to the customer's device and a pre-addressed email is opened for them to send. Nothing can time out, and nothing reports success that did not happen. The emailed verification-code step went with the backend — there is no server left to issue or check a code.
+>
+> Everything else is upstream's, unmodified. Please support the original author via the Buy Me A Coffee link below, and file tool bugs upstream rather than here.
+
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow.svg)](https://buymeacoffee.com/lmf5000)
 ![Version](https://img.shields.io/badge/version-v91-green)

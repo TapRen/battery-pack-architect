@@ -1239,9 +1239,7 @@
     .rfq-partner-name { font-size:0.85rem; font-weight:700; color:#1e293b; }
     .rfq-partner-name span { font-weight:600; color:#64748b; font-size:0.72rem; margin-left:6px; }
     .rfq-partner-blurb { font-size:0.74rem; color:#475569; margin-top:2px; }
-    #rfq-verify-row { display:flex; gap:8px; align-items:center; margin-top:12px; flex-wrap:wrap; }
-    #rfq-verify-row .btn-action { flex:0 0 auto; padding:6px 10px; }
-    #rfq-verified-badge { color:#15803d; font-weight:700; font-size:0.8rem; }
+    .rfq-done .btn-action { flex:0 0 auto; padding:6px 10px; }
     #rfq-status { font-size:0.76rem; min-height:16px; margin-top:8px; color:#475569; }
     #rfq-submit { width:100%; margin-top:10px; padding:9px; background:#16a34a; border:1px solid #15803d; color:#fff; border-radius:5px; font-weight:700; font-size:0.85rem; cursor:pointer; }
     #rfq-submit:disabled { background:#cbd5e1; border-color:#cbd5e1; color:#f8fafc; cursor:not-allowed; }
@@ -1257,7 +1255,7 @@
 <div id="rfq-overlay" class="modal-base-overlay"><div id="rfq-box">
     <div class="modal-header"><h3 style="margin:0; color:#1e293b;">🏭 Request Manufacturing Quote</h3><button id="rfq-close" style="border:none; background:none; font-size:1.5rem; cursor:pointer; color:#64748b;">&times;</button></div>
     <div class="modal-body" id="rfq-body">
-        <div class="rfq-intro">Get a manufacturing quote for <b id="rfq-pack-label">your pack</b>. A PDF spec sheet (with an embedded 3D snapshot) and your BPA design file are attached automatically.<br><span style="color:#94a3b8; font-size:0.68rem;">Tip: the verification code can land in spam.</span></div>
+        <div class="rfq-intro">Get a manufacturing quote for <b id="rfq-pack-label">your pack</b>. A PDF spec sheet (with an embedded 3D snapshot) and your BPA design file are generated in your browser and saved to your device.<br><span style="color:#94a3b8; font-size:0.68rem;">The last step opens an email for you to send — attach both files to it.</span></div>
         <label>Manufacturing Region</label>
         <select id="rfq-region"></select>
         <div id="rfq-partner-card"></div>
@@ -1278,15 +1276,9 @@
         <label>Note for Supplier *</label>
         <textarea id="rfq-note" rows="4" maxlength="5000" placeholder="Region, quantity needed, target price, timeline, application, enclosure / BMS requirements..."></textarea>
         <input type="text" id="rfq-website" tabindex="-1" autocomplete="off" style="position:absolute; left:-5000px; width:1px; height:1px;" aria-hidden="true">
-        <div id="rfq-verify-row">
-            <button type="button" id="rfq-send-code" class="btn-action btn-add">Send verification code</button>
-            <input type="text" id="rfq-code" maxlength="6" inputmode="numeric" placeholder="6-digit code" style="display:none; width:110px; flex:0 0 auto;">
-            <button type="button" id="rfq-verify" class="btn-action btn-add" style="display:none;">Verify</button>
-            <span id="rfq-verified-badge" style="display:none;">&#10004; Email verified</span>
-        </div>
         <div id="rfq-status"></div>
-        <button type="button" id="rfq-submit" disabled>Send RFQ</button>
-        <div class="rfq-smallprint">By sending, you submit your contact details, note, design JSON, 3D snapshot and generated PDF to the selected manufacturer, with a copy to Battery Pack Architect for delivery and quality tracking. The manufacturer replies directly to your email. Do not include unnecessary personal or confidential information. Verification codes expire after 10 minutes.</div>
+        <button type="button" id="rfq-submit" disabled>Prepare RFQ email</button>
+        <div class="rfq-smallprint">This prepares an email from your own mail account to the selected manufacturer, and saves your spec sheet and design file to your device to attach. Nothing is uploaded anywhere, and no copy is sent to Battery Pack Architect — your details go only to the manufacturer, when you send the email. The manufacturer replies directly to you. Do not include unnecessary personal or confidential information.</div>
     </div>
 </div></div>
 <div id="export-overlay" class="modal-base-overlay">
@@ -4182,10 +4174,29 @@
   
     /* ============================================================
        RFQ — Request a Manufacturing Quote
-       Backend: Google Apps Script web app (rfq-backend.gs).
-       Paste your deployed /exec URL into RFQ_ENDPOINT below.
+
+       MODIFIED IN THIS FORK (TapRen, 2026-10-28) — GPLv3 §5(a) notice.
+
+       Upstream submitted the RFQ to a Google Apps Script web app and
+       waited for it to postMessage a result back out of a hidden iframe.
+       That deployment is gone: Google returns HTTP 403 "in violation of
+       our Terms of Service" to both GET and POST. Because the client had
+       no branch for a reply that never arrives, a 45-second timer turned
+       every failure into "RFQ service timed out. Please try again." —
+       so customers retried indefinitely and no request ever reached the
+       manufacturer. Quote requests were lost silently.
+
+       This fork removes the backend rather than replacing it. The PDF
+       spec sheet and the design file are already produced in the browser,
+       so submitting needs no server at all: both files are downloaded and
+       a pre-addressed email is opened for the customer to send. Nothing
+       can time out, and nothing can claim success that did not happen.
+
+       The emailed-code verification step went with the backend — there is
+       no server left to issue or check a code, and sending the mail from
+       the customer's own client already proves the address works.
        ============================================================ */
-    const RFQ_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzKCIamEvNTLMj3qOI164mH1vGx9sx6b94FuLFrI_O8UhF8jVpselJJbzPQkhJEpinvPQ/exec';
+    const RFQ_MAILTO = 'Contact@TapRen.com';
     const RFQ_REGIONS = [
         { id: 'north-america', label: 'North America', partner: { id: 'tapren', name: 'TapRen Tech Solutions', location: 'USA', blurb: 'Custom battery pack design and assembly for OEMs across the USA.', moq: 10 } },
         { id: 'europe', label: 'Europe (coming soon)', partner: null },
@@ -4209,9 +4220,6 @@
         ['+385','hr','Croatia'], ['+386','si','Slovenia'], ['+420','cz','Czechia'], ['+421','sk','Slovakia'],
         ['+966','sa','Saudi Arabia'], ['+971','ae','UAE'], ['+972','il','Israel']
     ];
-    let rfqToken = null;          // one-time submit token from the backend
-    let rfqVerifiedEmail = null;  // email the token belongs to
-    let rfqCooldownTimer = null;
     let rfqBusy = false;
 
     // --- Shared state builder (same shape as exportState, reused for the attached design file) ---
@@ -4402,59 +4410,70 @@
         return doc.output('datauristring').split(',')[1]; // base64 only
     }
 
-    async function rfqApi(payload) {
-        if (RFQ_ENDPOINT.indexOf('http') !== 0) throw new Error('RFQ backend is not configured yet.');
+    /* Save bytes the browser already holds. No network call, so this cannot
+       fail silently the way the old backend did — either the file lands or
+       the browser tells the user it blocked it. */
+    function rfqDownload(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+    }
 
-        return new Promise((resolve, reject) => {
-            const nonce = (window.crypto && crypto.randomUUID)
-                ? crypto.randomUUID()
-                : (Date.now().toString(36) + Math.random().toString(36).slice(2));
-            const frameName = 'bpa-rfq-' + nonce.replace(/[^a-z0-9]/gi, '');
+    function rfqBase64ToBlob(b64, mime) {
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return new Blob([bytes], { type: mime });
+    }
 
-            const frame = document.createElement('iframe');
-            frame.name = frameName;
-            frame.style.display = 'none';
-            document.body.appendChild(frame);
+    /* Filenames the recipient can tell apart in an inbox, and that a file
+       system will accept on every platform. */
+    function rfqFileStem(packName) {
+        const stamp = new Date().toISOString().slice(0, 10);
+        const stem = String(packName || 'battery-pack')
+            .replace(/[^a-z0-9]+/gi, '-')
+            .replace(/^-+|-+$/g, '')
+            .slice(0, 48) || 'battery-pack';
+        return 'RFQ-' + stem + '-' + stamp;
+    }
 
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = RFQ_ENDPOINT;
-            form.target = frameName;
-            form.style.display = 'none';
-
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'payload';
-            input.value = JSON.stringify({ ...payload, _nonce: nonce });
-            form.appendChild(input);
-            document.body.appendChild(form);
-
-            let timer;
-            const cleanup = () => {
-                clearTimeout(timer);
-                window.removeEventListener('message', onMessage);
-                form.remove();
-                frame.remove();
-            };
-
-            const onMessage = (event) => {
-                const msg = event.data;
-                if (!msg || msg.bpaRfq !== true || msg.nonce !== nonce) return;
-
-                cleanup();
-                const data = msg.response || {};
-                if (!data.ok) reject(new Error(data.error || 'Request failed.'));
-                else resolve(data);
-            };
-
-            window.addEventListener('message', onMessage);
-            timer = setTimeout(() => {
-                cleanup();
-                reject(new Error('RFQ service timed out. Please try again.'));
-            }, 45000);
-
-            form.submit();
-        });
+    /* mailto: has no attachment mechanism and practical length limits that
+       vary by mail client, so the body is a short cover note and the detail
+       travels in the attached PDF. Keeping this well under ~1800 characters
+       is what stops a long note from silently truncating the email. */
+    function rfqMailtoUrl(form, partner, packLabel, files) {
+        const subject = 'Battery pack RFQ — ' + packLabel + ' — ' + form.name;
+        const note = form.note.length > 400 ? form.note.slice(0, 400) + '… (full note in the attached PDF)' : form.note;
+        const body = [
+            'Hello ' + partner.name + ',',
+            '',
+            'I would like a manufacturing quote for the battery pack below.',
+            '',
+            'Name:    ' + form.name,
+            'Company: ' + form.company,
+            'Email:   ' + form.email,
+            'Phone:   ' + form.phone,
+            'Pack:    ' + packLabel,
+            '',
+            'Note:',
+            note,
+            '',
+            '--',
+            'PLEASE ATTACH the two files just downloaded to your device:',
+            '  • ' + files.pdf + ' — spec sheet with the 3D layout',
+            '  • ' + files.json + ' — design file (re-openable in Battery Pack Architect)',
+            '',
+            'Generated by Battery Pack Architect — a visualisation aid, not a',
+            'certified engineering calculation. Specifications need review.'
+        ].join('\r\n');
+        return 'mailto:' + encodeURIComponent(RFQ_MAILTO) +
+               '?subject=' + encodeURIComponent(subject) +
+               '&body=' + encodeURIComponent(body);
     }
 
     // --- UI wiring ---
@@ -4463,9 +4482,7 @@
         card: document.getElementById('rfq-partner-card'), name: document.getElementById('rfq-name'),
         company: document.getElementById('rfq-company'), email: document.getElementById('rfq-email'),
         phone: document.getElementById('rfq-phone'), note: document.getElementById('rfq-note'),
-        hp: document.getElementById('rfq-website'), sendCode: document.getElementById('rfq-send-code'),
-        code: document.getElementById('rfq-code'), verify: document.getElementById('rfq-verify'),
-        badge: document.getElementById('rfq-verified-badge'), status: document.getElementById('rfq-status'),
+        hp: document.getElementById('rfq-website'), status: document.getElementById('rfq-status'),
         submit: document.getElementById('rfq-submit'), packLabel: document.getElementById('rfq-pack-label')
     };
 	
@@ -4525,17 +4542,9 @@
     }
     function rfqRefreshSubmit() {
         const p = rfqPartner();
-        const ready = !!p && rfqFormValid() && rfqToken && rfqVerifiedEmail === rfqEls.email.value.trim().toLowerCase();
+        const ready = !!p && rfqFormValid();
         rfqEls.submit.disabled = !ready || rfqBusy;
-        rfqEls.submit.textContent = p ? ('Send RFQ to ' + p.name) : 'Send RFQ';
-    }
-    function rfqResetVerification() {
-        rfqToken = null; rfqVerifiedEmail = null;
-        rfqEls.badge.style.display = 'none';
-        clearInterval(rfqCooldownTimer);
-        rfqEls.sendCode.style.display = ''; rfqEls.sendCode.disabled = false; rfqEls.sendCode.textContent = 'Send verification code';
-        rfqEls.code.style.display = 'none'; rfqEls.verify.style.display = 'none'; rfqEls.code.value = '';
-        rfqRefreshSubmit();
+        rfqEls.submit.textContent = p ? ('Prepare RFQ email to ' + p.name) : 'Prepare RFQ email';
     }
     function rfqRenderRegion() {
         const r = RFQ_REGIONS.find(x => x.id === rfqEls.region.value);
@@ -4570,57 +4579,16 @@
     }));
     rfqEls.email.addEventListener('input', () => {
         rfqEls.email.classList.remove('input-invalid');
-        if (rfqVerifiedEmail && rfqEls.email.value.trim().toLowerCase() !== rfqVerifiedEmail) rfqResetVerification();
         rfqRefreshSubmit();
-    });
-
-    rfqEls.sendCode.addEventListener('click', async () => {
-        if (!rfqValidateRequired()) return;
-        const email = rfqEls.email.value.trim();
-        if (rfqEls.hp.value) { rfqStatus('Verification code sent. Check your inbox.', 'ok'); return; } // honeypot: pretend for bots
-        rfqEls.sendCode.disabled = true;
-        rfqStatus('Sending verification code...');
-        try {
-            await rfqApi({ action: 'request_otp', email: email });
-            rfqStatus('Code sent to ' + email + '. It expires in 10 minutes - check spam if needed.', 'ok');
-            rfqEls.code.style.display = ''; rfqEls.verify.style.display = ''; rfqEls.code.focus();
-            let s = 60; rfqEls.sendCode.textContent = 'Resend in ' + s + 's';
-            clearInterval(rfqCooldownTimer);
-            rfqCooldownTimer = setInterval(() => {
-                s--; if (s <= 0) { clearInterval(rfqCooldownTimer); rfqEls.sendCode.disabled = false; rfqEls.sendCode.textContent = 'Resend code'; }
-                else rfqEls.sendCode.textContent = 'Resend in ' + s + 's';
-            }, 1000);
-        } catch (err) { rfqStatus(err.message, 'err'); rfqEls.sendCode.disabled = false; }
-    });
-
-    rfqEls.verify.addEventListener('click', async () => {
-        const email = rfqEls.email.value.trim();
-        const code = rfqEls.code.value.trim();
-        if (!/^\d{6}$/.test(code)) { rfqStatus('The code is 6 digits.', 'err'); return; }
-        rfqEls.verify.disabled = true; rfqStatus('Checking code...');
-        try {
-            const r = await rfqApi({ action: 'verify_otp', email: email, code: code });
-            rfqToken = r.token; rfqVerifiedEmail = email.toLowerCase();
-            rfqEls.badge.style.display = ''; rfqEls.sendCode.style.display = 'none';
-            rfqEls.code.style.display = 'none'; rfqEls.verify.style.display = 'none';
-            clearInterval(rfqCooldownTimer);
-            rfqRefreshSubmit();
-            rfqStatus(rfqEls.submit.disabled ? 'Email verified — finish the fields above, then click Send RFQ.' : 'Email verified — click Send RFQ below to finish.', 'ok');
-            rfqEls.submit.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            rfqEls.submit.classList.add('rfq-pulse');
-            setTimeout(() => rfqEls.submit.classList.remove('rfq-pulse'), 2400);
-        } catch (err) { rfqStatus(err.message, 'err'); }
-        rfqEls.verify.disabled = false;
     });
 
     rfqEls.submit.addEventListener('click', async () => {
         const partner = rfqPartner();
         if (!partner) { rfqStatus('Select an available manufacturing region.', 'err'); return; }
         if (!rfqValidateRequired()) return;
-        if (!rfqToken || rfqVerifiedEmail !== rfqEls.email.value.trim().toLowerCase()) {
-            rfqStatus('Verify your email address before sending the RFQ.', 'err');
-            return;
-        }
+        /* Honeypot: a bot that fills the hidden field gets the success screen
+           and no email client. A human never sees this branch. */
+        if (rfqEls.hp.value) { rfqStatus('Your request has been prepared.', 'ok'); return; }
         rfqBusy = true; rfqRefreshSubmit();
         const form = { name: rfqEls.name.value.trim(), company: rfqEls.company.value.trim() || 'Individual', email: rfqEls.email.value.trim(), phone: rfqSelectedCc + ' ' + rfqEls.phone.value.trim(), note: rfqEls.note.value.trim() };
         try {
@@ -4629,30 +4597,63 @@
             const specRows = rfqSpecRows();
             rfqStatus('Building PDF spec sheet...');
             const pdfB64 = await rfqBuildPdf(form, partner, specRows, shot);
-            rfqStatus('Sending your RFQ...');
-            const r = await rfqApi({
-                action: 'submit_rfq', token: rfqToken, partnerId: partner.id,
-                form: form, packName: rfqVal('pack-name') || 'Untitled pack',
-                pricing: {
-                    currency: selectedCurrency().code,
-                    totalCellCostEstimate: rfqTxt('out-cost'),
-                    basis: pricingBasisText(),
-                    rawCellCostInput: rfqVal('c-cost')
-                },
-                specRows: specRows, pdfBase64: pdfB64,
-                designJson: JSON.stringify(buildStateObject(), null, 2)
-            });
+
+            const packLabel = (rfqVal('pack-name') || 'Untitled pack') + ' (' + rfqTxt('out-config') + ')';
+            const stem = rfqFileStem(rfqVal('pack-name'));
+            const files = { pdf: stem + '.pdf', json: stem + '.json' };
+
+            rfqStatus('Saving your spec sheet and design file...');
+            rfqDownload(rfqBase64ToBlob(pdfB64, 'application/pdf'), files.pdf);
+            rfqDownload(
+                new Blob([JSON.stringify(buildStateObject(), null, 2)], { type: 'application/json' }),
+                files.json
+            );
+
+            /* Opening the mail client is the last step, so the two files are
+               already on disk by the time the customer reads "attach them". */
+            const mailto = rfqMailtoUrl(form, partner, packLabel, files);
+            window.location.href = mailto;
+
             const body = document.getElementById('rfq-body');
             const done = document.createElement('div'); done.className = 'rfq-done';
             const tick = document.createElement('div'); tick.className = 'rfq-done-tick'; tick.textContent = '✓';
-            const heading = document.createElement('h3'); heading.textContent = `RFQ sent to ${partner.name}`;
-            const paragraph = document.createElement('p');
-            paragraph.append('Reference ');
-            const ref = document.createElement('b'); ref.textContent = String(r.ref || 'pending'); paragraph.append(ref);
-            paragraph.append('. They will reply directly to ');
-            const email = document.createElement('b'); email.textContent = form.email; paragraph.append(email);
-            paragraph.append('. Your PDF spec sheet and design file were attached.');
-            done.append(tick, heading, paragraph); body.replaceChildren(done);
+            const heading = document.createElement('h3'); heading.textContent = 'Two files saved — now send the email';
+            const p1 = document.createElement('p');
+            p1.append('An email to ');
+            const to = document.createElement('b'); to.textContent = RFQ_MAILTO; p1.append(to);
+            p1.append(' should have opened in your mail app, already filled in. ');
+            p1.append('Attach the two files that were just downloaded, then send it:');
+            const list = document.createElement('ul');
+            list.style.cssText = 'margin:10px 0; padding-left:20px; text-align:left; font-size:0.85rem;';
+            [files.pdf + ' — spec sheet with the 3D layout',
+             files.json + ' — design file'].forEach(t => {
+                const li = document.createElement('li'); li.textContent = t; list.append(li);
+            });
+            /* mailto: does nothing on a device with no mail client configured —
+               a common case on desktop webmail. Showing the address and a copy
+               button means that user still has a way through, instead of a
+               success screen that quietly led nowhere. */
+            const p2 = document.createElement('p');
+            p2.style.cssText = 'font-size:0.8rem; color:#475569;';
+            p2.append('Nothing opened? Email ');
+            const to2 = document.createElement('b'); to2.textContent = RFQ_MAILTO; p2.append(to2);
+            p2.append(' directly and attach both files.');
+            const copyBtn = document.createElement('button');
+            copyBtn.type = 'button'; copyBtn.className = 'btn-action btn-add';
+            copyBtn.textContent = 'Copy email address';
+            copyBtn.style.marginTop = '8px';
+            copyBtn.addEventListener('click', () => {
+                navigator.clipboard.writeText(RFQ_MAILTO)
+                    .then(() => { copyBtn.textContent = 'Copied'; })
+                    .catch(() => { copyBtn.textContent = RFQ_MAILTO; });
+            });
+            const reopen = document.createElement('button');
+            reopen.type = 'button'; reopen.className = 'btn-action btn-add';
+            reopen.textContent = 'Re-open email draft';
+            reopen.style.cssText = 'margin-top:8px; margin-left:8px;';
+            reopen.addEventListener('click', () => { window.location.href = mailto; });
+            done.append(tick, heading, p1, list, p2, copyBtn, reopen);
+            body.replaceChildren(done);
         } catch (err) {
             rfqStatus(err.message, 'err');
             rfqBusy = false; rfqRefreshSubmit();
