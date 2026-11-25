@@ -2627,15 +2627,47 @@
 
     document.addEventListener('keydown', event => {
         if (event.key === 'Escape') closeTopModal();
-        if (event.key !== 'Tab') return;
-        const visible = [...document.querySelectorAll('.modal-base-overlay')].filter(el => getComputedStyle(el).display !== 'none').at(-1);
-        if (!visible) return;
-        const focusables = [...visible.querySelectorAll('button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])')].filter(el => el.offsetParent !== null);
-        if (!focusables.length) return;
-        const first = focusables[0], last = focusables.at(-1);
-        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     });
+
+    // [TapRen fork] Modal focus without a keyboard trap.
+    // Upstream wrapped Tab at the modal's first/last control. The disclaimer has
+    // one control, so every Tab was cancelled and a keyboard user could never
+    // leave the page, or the iframe it is embedded in on isource.tapren.com,
+    // without agreeing. Instead, everything behind the open modal is made
+    // `inert`: the browser keeps Tab inside the modal by itself, and Tab past
+    // its last control moves on to the host page or browser UI, as a native
+    // <dialog> does.
+    const MODAL_FOCUSABLE = 'button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), a[href], iframe, [tabindex]:not([tabindex="-1"])';
+    let openModal = null;
+    let focusBeforeModal = null;
+    function syncModalInert() {
+        const top = [...document.querySelectorAll('.modal-base-overlay')].filter(el => getComputedStyle(el).display !== 'none').at(-1) || null;
+        if (top === openModal) return;
+        [...document.body.children].forEach(el => {
+            if (el.tagName !== 'SCRIPT' && el.tagName !== 'STYLE') el.inert = !!top && el !== top;
+        });
+        if (top) {
+            if (!openModal) focusBeforeModal = document.activeElement;
+            if (!top.contains(document.activeElement)) {
+                const first = [...top.querySelectorAll(MODAL_FOCUSABLE)].find(el => el.offsetParent !== null);
+                if (first) first.focus({ preventScroll: true });
+            }
+        } else if (focusBeforeModal && document.contains(focusBeforeModal)) {
+            focusBeforeModal.focus({ preventScroll: true });
+            focusBeforeModal = null;
+        }
+        openModal = top;
+    }
+    const modalObserver = new MutationObserver(syncModalInert);
+    document.querySelectorAll('.modal-base-overlay').forEach(overlay => {
+        modalObserver.observe(overlay, { attributes: true, attributeFilter: ['style', 'class'] });
+    });
+    const disclaimerTitle = document.querySelector('#disclaimer-overlay .disc-header span:last-child');
+    if (disclaimerTitle) {
+        disclaimerTitle.id = 'disclaimer-title';
+        document.getElementById('disclaimer-overlay').setAttribute('aria-labelledby', 'disclaimer-title');
+    }
+    syncModalInert();
 
     // --- APPROXIMATE CHEMISTRY-SPECIFIC VOLTAGE CURVES ---
     function selectedChemistryId(nom) {
